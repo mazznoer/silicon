@@ -44,6 +44,14 @@ fn parse_str_color(s: &str) -> Result<Rgba<u8>, Error> {
         .map_err(|_| format_err!("Invalid color: `{}`", s))
 }
 
+fn parse_str_gradient(s: &str) -> Result<colorgrad::CatmullRomGradient, Error> {
+    colorgrad::GradientBuilder::new()
+        .css(s)
+        .mode(colorgrad::BlendMode::Rgb)
+        .build::<colorgrad::CatmullRomGradient>()
+        .map_err(|_| format_err!("Invalid CSS gradient: `{}`", s))
+}
+
 fn parse_font_str(s: &str) -> Vec<(String, f32)> {
     let mut result = vec![];
     for font in s.split(';') {
@@ -97,6 +105,10 @@ pub struct Config {
         parse(try_from_str = parse_str_color)
     )]
     pub background: Rgba<u8>,
+
+    /// Gradient background. eg. 'seagreen, #b4dA55, rgb(0, 125, 200)'
+    #[structopt(long, value_name = "CSS-GRADIENT", conflicts_with = "background", parse(try_from_str = parse_str_gradient))]
+    pub gradient: Option<colorgrad::CatmullRomGradient>,
 
     /// Show the path of silicon config file
     #[structopt(long)]
@@ -295,7 +307,10 @@ impl Config {
         Ok(ShadowAdder::new()
             .background(match &self.background_image {
                 Some(path) => Background::Image(image::open(path)?.to_rgba8()),
-                None => Background::Solid(self.background),
+                None => match &self.gradient {
+                    Some(gradient) => Background::Gradient(gradient.clone()),
+                    None => Background::Solid(self.background),
+                },
             })
             .shadow_color(self.shadow_color)
             .blur_radius(self.shadow_blur_radius)

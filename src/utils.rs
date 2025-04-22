@@ -1,4 +1,5 @@
 use crate::error::ParseColorError;
+use colorgrad::{CatmullRomGradient, Gradient};
 use image::imageops::{crop_imm, resize, FilterType};
 use image::Pixel;
 use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
@@ -119,6 +120,7 @@ pub(crate) fn add_window_controls(image: &mut RgbaImage, params: &WindowControls
 pub enum Background {
     Solid(Rgba<u8>),
     Image(RgbaImage),
+    Gradient(CatmullRomGradient),
 }
 
 impl Default for Background {
@@ -132,6 +134,9 @@ impl Background {
         match self {
             Background::Solid(color) => RgbaImage::from_pixel(width, height, color.to_owned()),
             Background::Image(image) => resize(image, width, height, FilterType::Triangle),
+            Background::Gradient(gradient) => RgbaImage::from_fn(width, height, |x, _| {
+                Rgba(gradient.at(x as f32 / width as f32).to_rgba8())
+            }),
         }
     }
 }
