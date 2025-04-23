@@ -227,7 +227,16 @@ impl ShadowAdder {
         let height = image.height() + self.pad_vert * 2;
 
         // create the shadow
-        let mut shadow = self.background.to_image(width, height);
+        let mut shadow = RgbaImage::from_pixel(
+            width,
+            height,
+            Rgba([
+                self.shadow_color[0],
+                self.shadow_color[1],
+                self.shadow_color[2],
+                0,
+            ]),
+        );
         if self.blur_radius > 0.0 {
             let rect = Rect::at(
                 self.pad_horiz as i32 + self.offset_x,
@@ -245,7 +254,10 @@ impl ShadowAdder {
         // copy the original image to the top of it
         copy_alpha(image, &mut shadow, self.pad_horiz, self.pad_vert);
 
-        shadow
+        let mut background = self.background.to_image(width, height);
+        copy_alpha(&shadow, &mut background, 0, 0);
+
+        background
     }
 }
 
