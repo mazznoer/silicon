@@ -5,6 +5,7 @@ use image::Pixel;
 use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut};
 use imageproc::rect::Rect;
+use std::f32::consts::PI;
 
 pub trait ToRgba {
     type Target;
@@ -120,7 +121,7 @@ pub(crate) fn add_window_controls(image: &mut RgbaImage, params: &WindowControls
 pub enum Background {
     Solid(Rgba<u8>),
     Image(RgbaImage),
-    Gradient(CatmullRomGradient),
+    Gradient(CatmullRomGradient, f32),
 }
 
 impl Default for Background {
@@ -134,9 +135,25 @@ impl Background {
         match self {
             Background::Solid(color) => RgbaImage::from_pixel(width, height, color.to_owned()),
             Background::Image(image) => resize(image, width, height, FilterType::Triangle),
-            Background::Gradient(gradient) => RgbaImage::from_fn(width, height, |x, _| {
-                Rgba(gradient.at(x as f32 / width as f32).to_rgba8())
-            }),
+            Background::Gradient(gradient, angle) => {
+                let [x1, y1, x2, y2] = angle2points(*angle);
+                let x1 = x1 * width as f32;
+                let y1 = y1 * height as f32;
+                let x2 = x2 * width as f32;
+                let y2 = y2 * height as f32;
+                let maxdist = distance(x1, y1, x2, y2);
+                let a1 = (y2 - y1).atan2(x2 - x1) + PI / 2.0;
+                let x2 = x1 + a1.cos();
+                let y2 = y1 + a1.sin();
+                let a = y1 - y2;
+                let b = x2 - x1;
+                let c = x1 * y2 - x2 * y1;
+                let d2 = (a * a + b * b).sqrt();
+                RgbaImage::from_fn(width, height, |x, y| {
+                    let t = -(a * x as f32 + b * y as f32 + c) / d2 / maxdist;
+                    Rgba(gradient.at(t).to_rgba8())
+                })
+            }
         }
     }
 }
@@ -366,6 +383,27 @@ pub(crate) fn draw_filled_circle_mut<I>(
             p += 2 * (x - y) + 1;
         }
     }
+}
+
+fn distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt()
+}
+
+// angle in degrees
+fn angle2points(angle: f32) -> [f32; 4] {
+    let angle = angle.to_radians() + PI;
+    let segment = (angle / PI * 2.0).floor() + 2.0;
+    let diagonal = (0.5 * segment + 0.25) * PI;
+    let op = (diagonal - angle).abs().cos() * 2_f32.sqrt();
+    let x = op * angle.cos();
+    let y = op * angle.sin();
+
+    let x1 = if x < 0.0 { 1.0 } else { 0.0 };
+    let y1 = if y < 0.0 { 1.0 } else { 0.0 };
+    let x2 = if x >= 0.0 { x } else { x + 1.0 };
+    let y2 = if y >= 0.0 { y } else { y + 1.0 };
+
+    [x1, y1, x2, y2]
 }
 
 #[cfg(test)]
